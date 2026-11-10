@@ -11,7 +11,7 @@ export default function NotFound() {
 
         {/* Studio Mascot & Icon */}
         <div className="relative inline-block">
-          <div className="w-24 h-24 sm:w-28 sm:h-28 mx-auto rounded-3xl bg-gradient-to-br from-amber-500/20 via-purple-600/20 to-pink-500/20 border-2 border-amber-500/40 flex items-center justify-center shadow-inner">
+          <div className="w-24 h-24 sm:w-28 sm:h-28 mx-auto rounded-3xl bg-linear-to-br from-amber-500/20 via-purple-600/20 to-pink-500/20 border-2 border-amber-500/40 flex items-center justify-center shadow-inner">
             <span className="text-5xl sm:text-6xl select-none animate-bounce">
               🎭
             </span>
@@ -38,7 +38,7 @@ export default function NotFound() {
         <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
           <Link
             href="/lobby"
-            className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-linear-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Tv className="w-4 h-4" />
             Vào Sảnh Đấu Trường

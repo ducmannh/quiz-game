@@ -17,8 +17,8 @@ export default function QuizLogo({ size = "md" }: { size?: "sm" | "md" | "lg" })
     <Link href="/" className="inline-flex items-center gap-1 group select-none">
       <div className={`font-black tracking-tighter ${textSizes[size]} flex items-center leading-none`}>
         <span className="text-[#00C2CB] group-hover:rotate-[-4deg] transition-transform inline-block">Q</span>
-        <span className="text-[#FF7A00] group-hover:rotate-[3deg] transition-transform inline-block">u</span>
-        <span className="text-[#E040FB] group-hover:rotate-[-3deg] transition-transform inline-block">i</span>
+        <span className="text-[#FF7A00] group-hover:rotate-3 transition-transform inline-block">u</span>
+        <span className="text-[#E040FB] group-hover:-rotate-3 transition-transform inline-block">i</span>
         <span className="text-[#00C853] group-hover:rotate-[4deg] transition-transform inline-block">z</span>
         <span className={`inline-block mx-0.5 rounded-full bg-slate-900 ${dotSizes[size]} self-baseline`} />
         <span className="text-slate-900 font-black">com</span>

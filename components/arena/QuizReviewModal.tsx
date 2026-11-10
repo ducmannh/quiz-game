@@ -163,7 +163,7 @@ export default function QuizReviewModal({
 
                         {isTheCorrectOne && (
                           <span className="text-[10px] text-[#00a76d] font-black shrink-0 flex items-center gap-0.5">
-                            <Check className="w-3 h-3 stroke-[3]" /> Đáp án đúng
+                            <Check className="w-3 h-3 stroke-3" /> Đáp án đúng
                           </span>
                         )}
                         {isSelectedByPlayer && !isTheCorrectOne && (

@@ -1212,7 +1212,7 @@ export default function ThreeExamHall({
           </div>
           <div className="w-full h-2 bg-black/60 border border-white/20 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-[#00C2CB] to-[#00a76d] transition-all duration-300 rounded-full"
+              className="h-full bg-linear-to-r from-[#00C2CB] to-[#00a76d] transition-all duration-300 rounded-full"
               style={{ width: `${progressPercent}%` }}
             />
           </div>

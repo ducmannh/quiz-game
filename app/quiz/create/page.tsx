@@ -146,7 +146,7 @@ export default function CreateQuizPage() {
               >
                 <Play className="w-4 h-4 fill-white" />
                 <span>Vào Làm Bài Thi Ngay</span>
-                <ArrowRight className="w-4 h-4 stroke-[3]" />
+                <ArrowRight className="w-4 h-4 stroke-3" />
               </button>
               <button
                 onClick={() => {
@@ -263,7 +263,7 @@ export default function CreateQuizPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Độ khó */}
               <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-700 mb-2 flex items-center gap-1.5">
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-700 mb-2 items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-[#00a76d]" />
                   Mức độ khó
                 </label>
@@ -293,7 +293,7 @@ export default function CreateQuizPage() {
 
               {/* Số lượng */}
               <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-700 mb-2 flex items-center gap-1.5">
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-700 mb-2 items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5 text-[#00C2CB]" />
                   Số lượng câu
                 </label>
@@ -332,7 +332,7 @@ export default function CreateQuizPage() {
                   <>
                     <Sparkles className="w-4 h-4" />
                     <span>Sinh Đề Bằng AI & Mở Phòng Thi</span>
-                    <ArrowRight className="w-4 h-4 stroke-[3]" />
+                    <ArrowRight className="w-4 h-4 stroke-3" />
                   </>
                 )}
               </button>

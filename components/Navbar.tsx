@@ -93,7 +93,7 @@ export default function Navbar() {
               {player ? (
                 <>
                   <span className="text-base">{player.avatar}</span>
-                  <span className="max-w-[90px] sm:max-w-[120px] truncate">{player.nickname}</span>
+                  <span className="max-w-22.5 sm:max-w-30 truncate">{player.nickname}</span>
                 </>
               ) : (
                 <>

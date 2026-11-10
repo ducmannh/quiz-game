@@ -102,7 +102,7 @@ export default function HomePage() {
                 className="w-full sm:w-auto px-6 py-3.5 btn-3d btn-3d-green text-sm flex items-center justify-center gap-2 shrink-0"
               >
                 <span>Vào Chơi Ngay</span>
-                <ArrowRight className="w-4 h-4 stroke-[3]" />
+                <ArrowRight className="w-4 h-4 stroke-3" />
               </button>
             </form>
           </div>

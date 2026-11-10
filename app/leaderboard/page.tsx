@@ -122,7 +122,7 @@ export default function LeaderboardPage() {
                 <div className="flex items-end justify-center gap-3 sm:gap-6 mb-10 pt-6 px-2">
                   {/* Hạng 2 (Silver) */}
                   {top2 && (
-                    <div className="flex flex-col items-center flex-1 max-w-[160px]">
+                    <div className="flex flex-col items-center flex-1 max-w-40">
                       <div className="relative mb-2">
                         <div className="w-16 h-16 rounded-2xl bg-white border-3 border-black flex items-center justify-center text-3xl shadow-[4px_4px_0px_#000]">
                           {top2.avatar}
@@ -146,7 +146,7 @@ export default function LeaderboardPage() {
 
                   {/* Hạng 1 (Gold - Quán Quân) */}
                   {top1 && (
-                    <div className="flex flex-col items-center flex-1 max-w-[190px] -mt-6">
+                    <div className="flex flex-col items-center flex-1 max-w-47.5 -mt-6">
                       <div className="relative mb-2">
                         <div className="w-20 h-20 rounded-3xl bg-[#FFDE6A] border-3 border-black flex items-center justify-center text-4xl shadow-[6px_6px_0px_#000]">
                           {top1.avatar}
@@ -172,7 +172,7 @@ export default function LeaderboardPage() {
 
                   {/* Hạng 3 (Bronze) */}
                   {top3 && (
-                    <div className="flex flex-col items-center flex-1 max-w-[160px]">
+                    <div className="flex flex-col items-center flex-1 max-w-40">
                       <div className="relative mb-2">
                         <div className="w-16 h-16 rounded-2xl bg-[#FFE0B2] border-3 border-black flex items-center justify-center text-3xl shadow-[4px_4px_0px_#000]">
                           {top3.avatar}
