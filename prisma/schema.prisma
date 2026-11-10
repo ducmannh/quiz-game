@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -------------------------------------------------------------
+// NGƯỜI CHƠI (USER)
+// -------------------------------------------------------------
+model User {
+  id               String            @id @default(cuid())
+  email            String?           @unique
+  name             String
+  avatar           String?
+  totalScore       Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  createdQuizzes   Quiz[]            @relation("CreatedQuizzes")
+  attempts         QuizAttempt[]
+  roomParticipants RoomParticipant[]
+}
+
+// -------------------------------------------------------------
+// CHỦ ĐỀ / DANH MỤC (CATEGORY)
+// -------------------------------------------------------------
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  icon        String?
+  description String?
+  quizzes     Quiz[]
+}
+
+// -------------------------------------------------------------
+// BỘ ĐỀ TRẮC NGHIỆM (QUIZ)
+// -------------------------------------------------------------
+model Quiz {
+  id              String         @id @default(cuid())
+  title           String
+  description     String?
+  topic           String
+  difficulty      String         @default("MEDIUM") // EASY, MEDIUM, HARD
+  timePerQuestion Int            @default(20)       // Thời gian đếm ngược (giây)
+  isAIGenerated   Boolean        @default(false)    // Do AI sinh hay tạo thủ công
+
+  categoryId      String?
+  category        Category?      @relation(fields: [categoryId], references: [id])
+
+  authorId        String?
+  author          User?          @relation("CreatedQuizzes", fields: [authorId], references: [id])
+
+  questions       Question[]
+  attempts        QuizAttempt[]
+  rooms           Room[]
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+// -------------------------------------------------------------
+// CÂU HỎI (QUESTION)
+// -------------------------------------------------------------
+model Question {
+  id             String          @id @default(cuid())
+  quizId         String
+  quiz           Quiz            @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  text           String          @db.Text
+  imageUrl       String?
+  explanation    String?         @db.Text // Lời giải thích từ AI / tác giả
+  order          Int             @default(0)
+
+  options        Option[]
+  attemptAnswers AttemptAnswer[]
+}
+
+// -------------------------------------------------------------
+// CÁC LỰA CHỌN TRẢ LỜI (OPTION: A, B, C, D)
+// -------------------------------------------------------------
+model Option {
+  id             String          @id @default(cuid())
+  questionId     String
+  question       Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  text           String
+  isCorrect      Boolean         @default(false)
+
+  attemptAnswers AttemptAnswer[]
+}
+
+// -------------------------------------------------------------
+// LƯỢT CHƠI CÁ NHÂN (QUIZ ATTEMPT)
+// -------------------------------------------------------------
+model QuizAttempt {
+  id             String          @id @default(cuid())
+  userId         String?
+  user           User?           @relation(fields: [userId], references: [id])
+
+  quizId         String
+  quiz           Quiz            @relation(fields: [quizId], references: [id])
+
+  score          Int             @default(0)
+  totalQuestions Int             @default(0)
+  correctCount   Int             @default(0)
+  timeSpent      Int             @default(0) // Tổng số giây hoàn thành
+  highestStreak  Int             @default(0) // Chuỗi trả lời đúng dài nhất
+
+  answers        AttemptAnswer[]
+  completedAt    DateTime        @default(now())
+}
+
+// -------------------------------------------------------------
+// CHI TIẾT CÂU TRẢ LỜI CỦA LƯỢT CHƠI (ATTEMPT ANSWER)
+// -------------------------------------------------------------
+model AttemptAnswer {
+  id               String       @id @default(cuid())
+  attemptId        String
+  attempt          QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  questionId       String
+  question         Question     @relation(fields: [questionId], references: [id])
+
+  selectedOptionId String?
+  selectedOption   Option?      @relation(fields: [selectedOptionId], references: [id])
+
+  isCorrect        Boolean      @default(false)
+  timeTaken        Int          @default(0) // Số giây thí sinh mất để chọn câu này
+}
+
+// -------------------------------------------------------------
+// PHÒNG ĐẤU TRƯỜNG GAMESHOW (ROOM - Hỗ trợ 10 bục thí sinh + Khán giả)
+// -------------------------------------------------------------
+model Room {
+  id                   String            @id @default(cuid())
+  code                 String            @unique // Mã phòng 6 số ngẫu nhiên (ví dụ: "839201")
+  title                String
+  status               String            @default("WAITING") // WAITING, IN_PROGRESS, FINISHED
+
+  quizId               String
+  quiz                 Quiz              @relation(fields: [quizId], references: [id])
+
+  hostId               String?           // Người chủ trì phòng
+  currentQuestionIndex Int               @default(0)
+  maxPodiums           Int               @default(10)        // Mặc định tối đa 10 bục thí sinh
+
+  participants         RoomParticipant[]
+
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+}
+
+// -------------------------------------------------------------
+// THÀNH VIÊN TRONG PHÒNG THI (THÍ SINH TRÊN BỤC HOẶC KHÁN GIẢ)
+// -------------------------------------------------------------
+model RoomParticipant {
+  id                  String   @id @default(cuid())
+  roomId              String
+  room                Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  userId              String?
+  user                User?    @relation(fields: [userId], references: [id])
+
+  nickname            String
+  avatar              String?
+  role                String   @default("PLAYER") // "PLAYER" (trên bục) hoặc "SPECTATOR" (khán đài)
+  podiumNumber        Int?     // Số thứ tự bục 1 -> 10 (nếu role là PLAYER)
+
+  score               Int      @default(0)
+  streak              Int      @default(0)
+  isReady             Boolean  @default(false)
+  hasAnsweredCurrent  Boolean  @default(false)
+
+  joinedAt            DateTime @default(now())
+}
