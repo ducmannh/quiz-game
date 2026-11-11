@@ -108,12 +108,12 @@ export async function joinRoomAction(payload: JoinRoomPayload) {
         where: { id: payload.userId },
         update: {
           name: payload.nickname || "Thí Sinh",
-          avatar: payload.avatar || "🦊",
+          avatar: payload.avatar || "🎓",
         },
         create: {
           id: payload.userId,
           name: payload.nickname || "Thí Sinh",
-          avatar: payload.avatar || "🦊",
+          avatar: payload.avatar || "🎓",
         },
       })
       validUserId = user.id

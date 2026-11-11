@@ -11,9 +11,11 @@ datasource db {
 // -------------------------------------------------------------
 model User {
   id               String            @id @default(cuid())
+  username         String?                    // Tên tài khoản đăng nhập
+  password         String?                    // Mật khẩu
   email            String?           @unique
-  name             String
-  avatar           String?
+  name             String                     // Tên hiển thị (Họ và tên hoặc biệt danh)
+  avatar           String?                    // Avatar (tùy chọn hoặc mặc định)
   totalScore       Int               @default(0)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
@@ -21,6 +23,10 @@ model User {
   createdQuizzes   Quiz[]            @relation("CreatedQuizzes")
   attempts         QuizAttempt[]
   roomParticipants RoomParticipant[]
+  ledGroups        Group[]           @relation("GroupLeader")
+  groupMemberships GroupMember[]
+
+  @@index([username])
 }
 
 // -------------------------------------------------------------
@@ -103,6 +109,9 @@ model QuizAttempt {
   quizId         String
   quiz           Quiz            @relation(fields: [quizId], references: [id])
 
+  roomId         String?
+  room           Room?           @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
   score          Int             @default(0)
   totalQuestions Int             @default(0)
   correctCount   Int             @default(0)
@@ -111,6 +120,9 @@ model QuizAttempt {
 
   answers        AttemptAnswer[]
   completedAt    DateTime        @default(now())
+
+  @@index([roomId])
+  @@index([userId])
 }
 
 // -------------------------------------------------------------
@@ -138,19 +150,26 @@ model Room {
   id                   String            @id @default(cuid())
   code                 String            @unique // Mã phòng 6 số ngẫu nhiên (ví dụ: "839201")
   title                String
+  topic                String?           // Chủ đề của phòng thi
   status               String            @default("WAITING") // WAITING, IN_PROGRESS, FINISHED
 
   quizId               String
   quiz                 Quiz              @relation(fields: [quizId], references: [id])
+
+  groupId              String?           // Phòng thi thuộc nhóm nào (nếu có)
+  group                Group?            @relation(fields: [groupId], references: [id], onDelete: SetNull)
 
   hostId               String?           // Người chủ trì phòng
   currentQuestionIndex Int               @default(0)
   maxPodiums           Int               @default(10)        // Mặc định tối đa 10 bục thí sinh
 
   participants         RoomParticipant[]
+  attempts             QuizAttempt[]
 
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
+
+  @@index([groupId])
 }
 
 // -------------------------------------------------------------
@@ -175,4 +194,45 @@ model RoomParticipant {
   hasAnsweredCurrent  Boolean  @default(false)
 
   joinedAt            DateTime @default(now())
+}
+
+// -------------------------------------------------------------
+// NHÓM THI ĐẤU / HỌC TẬP (GROUP)
+// -------------------------------------------------------------
+model Group {
+  id          String        @id @default(cuid())
+  name        String        // Tên nhóm (Ví dụ: Nhóm A, Nhóm B, Đội 1...)
+  code        String        @unique // Mã mời vào nhóm (Ví dụ: GR-9382)
+  description String?       // Mô tả nhóm
+
+  leaderId    String        // ID của Trưởng nhóm
+  leader      User          @relation("GroupLeader", fields: [leaderId], references: [id])
+
+  members     GroupMember[]
+  rooms       Room[]
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([code])
+  @@index([leaderId])
+}
+
+// -------------------------------------------------------------
+// THÀNH VIÊN TRONG NHÓM (GROUP MEMBER)
+// -------------------------------------------------------------
+model GroupMember {
+  id        String   @id @default(cuid())
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  role      String   @default("MEMBER") // "LEADER" hoặc "MEMBER"
+  joinedAt  DateTime @default(now())
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
 }

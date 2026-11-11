@@ -7,7 +7,6 @@
     "build": "next build --webpack",
     "start": "next start -p 3003",
     "lint": "eslint",
-    "db:seed": "node --experimental-strip-types prisma/seed.ts",
     "db:clear": "node --experimental-strip-types prisma/clear-data.ts"
   },
   "dependencies": {

@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useEffect, useCallback, use, useRef, Suspense } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import { getStoredPlayer, getOrCreateDefaultPlayer, PlayerProfile } from "@/lib/player"
+import { getStoredPlayer, PlayerProfile } from "@/lib/player"
 import { getRoomDetailAction, joinRoomAction } from "@/app/actions/room"
 import { saveQuizAttemptAction } from "@/app/actions/attempt"
 import { calculateQuestionScore } from "@/lib/scoring"
@@ -66,6 +67,7 @@ interface UserAnswerRecord extends ReviewQuestionItem {
 
 function RoomGameplayContent({ params }: { params: Promise<{ code: string }> }) {
   const { code: roomCode } = use(params)
+  const router = useRouter()
 
   // User State
   const [player, setPlayer] = useState<PlayerProfile | null>(null)
@@ -92,11 +94,18 @@ function RoomGameplayContent({ params }: { params: Promise<{ code: string }> }) 
   const [isCopied, setIsCopied] = useState(false)
   const isSavedRef = useRef(false)
 
-  // 1. Tải thông tin phòng thi
+  // 1. Tải thông tin phòng thi (YÊU CẦU ĐÃ ĐĂNG NHẬP)
   useEffect(() => {
     async function initRoom() {
       setIsLoading(true)
-      const userProfile = getStoredPlayer() || getOrCreateDefaultPlayer()
+      const userProfile = getStoredPlayer()
+
+      // BẮT BUỘC ĐĂNG NHẬP: Nếu chưa đăng nhập hoặc không có username hợp lệ -> chuyển hướng sang /login
+      if (!userProfile || !userProfile.id || !userProfile.username) {
+        router.replace(`/login?redirect=${encodeURIComponent(`/room/${roomCode}`)}`)
+        return
+      }
+
       setPlayer(userProfile)
 
       const res = await getRoomDetailAction(roomCode)
@@ -115,15 +124,15 @@ function RoomGameplayContent({ params }: { params: Promise<{ code: string }> }) 
       await joinRoomAction({
         code: roomCode,
         userId: userProfile.id,
-        nickname: userProfile.nickname,
-        avatar: userProfile.avatar,
+        nickname: userProfile.nickname || userProfile.name || userProfile.username,
+        avatar: userProfile.avatar || "🎓",
       })
 
       setIsLoading(false)
     }
 
     initRoom()
-  }, [roomCode])
+  }, [roomCode, router])
 
   const questions = room?.quiz.questions || []
   const currentQuestion = questions[currentIdx]
@@ -226,6 +235,7 @@ function RoomGameplayContent({ params }: { params: Promise<{ code: string }> }) 
     saveQuizAttemptAction({
       userId: player?.id || "guest",
       quizId: room.quiz.id,
+      roomId: room.id,
       score: myScore,
       highestStreak,
       totalQuestions: userAnswers.length,

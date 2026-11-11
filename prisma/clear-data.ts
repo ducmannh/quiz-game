@@ -25,6 +25,12 @@ async function clearData() {
   const delRooms = await prisma.room.deleteMany({})
   console.log(`- Đã xóa ${delRooms.count} phòng thi đấu trường (Room)`)
 
+  const delMembers = await prisma.groupMember.deleteMany({})
+  console.log(`- Đã xóa ${delMembers.count} thành viên nhóm (GroupMember)`)
+
+  const delGroups = await prisma.group.deleteMany({})
+  console.log(`- Đã xóa ${delGroups.count} nhóm thi đấu (Group)`)
+
   const delOptions = await prisma.option.deleteMany({})
   console.log(`- Đã xóa ${delOptions.count} phương án lựa chọn (Option)`)
 

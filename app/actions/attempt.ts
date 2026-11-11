@@ -12,6 +12,7 @@ export interface SaveAttemptAnswerItem {
 export interface SaveAttemptPayload {
   userId?: string | null
   quizId: string
+  roomId?: string | null
   score: number
   totalQuestions: number
   correctCount: number
@@ -33,7 +34,7 @@ export async function saveQuizAttemptAction(payload: SaveAttemptPayload) {
         create: {
           id: payload.userId,
           name: "Thí Sinh",
-          avatar: "🦊",
+          avatar: "🎓",
         },
       })
       validUserId = user.id
@@ -43,6 +44,7 @@ export async function saveQuizAttemptAction(payload: SaveAttemptPayload) {
       data: {
         userId: validUserId,
         quizId: payload.quizId,
+        roomId: payload.roomId || null,
         score: payload.score,
         totalQuestions: payload.totalQuestions,
         correctCount: payload.correctCount,

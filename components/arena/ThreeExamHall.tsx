@@ -12,6 +12,16 @@ import {
   Zap,
   Camera,
   Compass,
+  Clock,
+  ArrowRight,
+  Sparkles,
+  Minimize2,
+  Armchair,
+  Sliders,
+  Eye,
+  RotateCcw,
+  Check,
+  X,
 } from "lucide-react"
 
 export interface QuestionData {
@@ -64,6 +74,43 @@ const OPTION_RECTS = [
 
 const NEXT_BTN_RECT = { x: 730, y: 446, w: 259, h: 54 }
 
+// Danh sách cấu hình 10 bàn thi đấu và NPC trong trường thi 3D
+const DESK_CONFIGS = [
+  { x: -5, z: -2.2, num: 1, emoji: "🦁", name: "Thí Sinh #01", quote: "Đề thi hôm nay kịch tính thật đấy!" },
+  { x: -2.5, z: -2.2, num: 2, emoji: "🐼", name: "Thí Sinh #02", quote: "Cố gắng đạt 100% điểm nhé bạn ơi!" },
+  { x: 0, z: -2.2, num: 3, emoji: "🦊", name: "Bàn Thi #03 (Của Bạn)", quote: "Bàn thi chính thức của bạn. Bấm ngồi để mở đề thi." },
+  { x: 2.5, z: -2.2, num: 4, emoji: "🐰", name: "Thí Sinh #04", quote: "Chuẩn bị vào câu tiếp theo chưa?" },
+  { x: 5, z: -2.2, num: 5, emoji: "🐯", name: "Thí Sinh #05", quote: "Tập trung cao độ, đừng để bị phân tâm!" },
+  { x: -5, z: 1.2, num: 6, emoji: "🐻", name: "Thí Sinh #06", quote: "Màn hình 3D trường thi xịn sò quá!" },
+  { x: -2.5, z: 1.2, num: 7, emoji: "🐱", name: "Thí Sinh #07", quote: "Chúc bạn leo top bảng vàng thành công!" },
+  { x: 0, z: 1.2, num: 8, emoji: "🐶", name: "Thí Sinh #08", quote: "Câu hỏi tiếp theo chắc sẽ bất ngờ lắm đây!" },
+  { x: 2.5, z: 1.2, num: 9, emoji: "🐨", name: "Thí Sinh #09", quote: "Ánh sáng phòng thi hiện đại và sáng rõ thật!" },
+  { x: 5, z: 1.2, num: 10, emoji: "🦊", name: "Thí Sinh #10", quote: "Bấm đáp án thật cẩn thận nha bạn!" },
+]
+
+export interface NearbyTarget {
+  type: "MY_DESK" | "NPC"
+  deskNum: number
+  name: string
+  emoji: string
+  quote?: string
+}
+
+// Cấu hình góc nhìn POV và điều khiển chuột
+export interface PovSettings {
+  fov: number // 50° - 95° (mặc định 70° góc rộng)
+  cameraDist: number // 3.5m - 9.0m (mặc định 5.6m)
+  mouseControl: "FREE_LOOK" | "DRAG_TO_LOOK" // "FREE_LOOK": chỉ cần quay chuột, không cần giữ
+  mouseSensitivity: number // 0.5x - 2.5x
+}
+
+const DEFAULT_POV_SETTINGS: PovSettings = {
+  fov: 70, // Góc nhìn POV rộng hơn theo yêu cầu người dùng
+  cameraDist: 5.6,
+  mouseControl: "FREE_LOOK", // Chỉ cần di chuột là xoay, không cần giữ phím hay chuột
+  mouseSensitivity: 1.0,
+}
+
 export default function ThreeExamHall({
   player,
   currentQuestion,
@@ -83,6 +130,72 @@ export default function ThreeExamHall({
 }: ThreeExamHallProps) {
   const mountRef = useRef<HTMLDivElement>(null)
   const [cameraMode, setCameraMode] = useState<"FOLLOW" | "OVERVIEW">("FOLLOW")
+  const [isSeated, setIsSeated] = useState(true)
+  const isSeatedRef = useRef(isSeated)
+  const myDeskMeshRef = useRef<THREE.Mesh | null>(null)
+  const myDeskObjectsRef = useRef<THREE.Object3D[]>([])
+  const myDeskBadgeRef = useRef<THREE.Sprite | null>(null)
+  const npcSpritesRef = useRef<{ [key: number]: THREE.Sprite }>({})
+
+  // Cài đặt góc nhìn POV & Điều khiển (Khởi tạo lười từ localStorage)
+  const [povSettings, setPovSettings] = useState<PovSettings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("fun_quiz_pov_settings")
+        if (saved) {
+          return { ...DEFAULT_POV_SETTINGS, ...JSON.parse(saved) }
+        }
+      } catch {
+        // Bỏ qua lỗi parse
+      }
+    }
+    return DEFAULT_POV_SETTINGS
+  })
+  const povSettingsRef = useRef<PovSettings>(DEFAULT_POV_SETTINGS)
+  const [showPovSettings, setShowPovSettings] = useState(false)
+  const showPovSettingsRef = useRef(showPovSettings)
+
+  useEffect(() => {
+    showPovSettingsRef.current = showPovSettings
+  }, [showPovSettings])
+
+  useEffect(() => {
+    povSettingsRef.current = povSettings
+  }, [povSettings])
+
+  const updatePovSetting = <K extends keyof PovSettings>(key: K, value: PovSettings[K]) => {
+    setPovSettings((prev) => {
+      const next = { ...prev, [key]: value }
+      try {
+        localStorage.setItem("fun_quiz_pov_settings", JSON.stringify(next))
+      } catch {
+        // Bỏ qua
+      }
+      return next
+    })
+  }
+
+  const resetPovSettings = () => {
+    setPovSettings(DEFAULT_POV_SETTINGS)
+    try {
+      localStorage.setItem("fun_quiz_pov_settings", JSON.stringify(DEFAULT_POV_SETTINGS))
+    } catch {
+      // Bỏ qua
+    }
+  }
+
+  // Proximity Interaction Target (Chỉ hiển thị thông báo khi lại gần bàn hoặc NPC)
+  const [nearbyTarget, setNearbyTarget] = useState<NearbyTarget | null>(null)
+  const nearbyTargetRef = useRef<NearbyTarget | null>(null)
+
+  // 3rd Person Orbit Camera Controls (Giữ chuột hoặc tự do di chuột để xoay quanh nhân vật)
+  const cameraYawRef = useRef(0) // Góc quay ngang (0 = nhìn thẳng về sân khấu)
+  const cameraPitchRef = useRef(0.28) // Góc nghiêng dọc (~16 độ)
+  const isPointerDownRef = useRef(false)
+  const isDraggingCameraRef = useRef(false)
+  const pointerDownPosRef = useRef({ x: 0, y: 0 })
+  const lastPointerPosRef = useRef({ x: 0, y: 0 })
+
   const [virtualJoystickActive, setVirtualJoystickActive] = useState(false)
   const joystickVectorRef = useRef({ x: 0, y: 0 })
   const joystickStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -105,6 +218,10 @@ export default function ThreeExamHall({
   const playerRef = useRef(player)
   const playerSpriteRef = useRef<THREE.Sprite | null>(null)
   const updateJumbotronTextureRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    isSeatedRef.current = isSeated
+  }, [isSeated])
 
   useEffect(() => {
     currentQuestionRef.current = currentQuestion
@@ -339,28 +456,11 @@ export default function ThreeExamHall({
         ctx.fillText(theme.letter, rect.x + 35, rect.y + rect.h / 2 + 10)
         ctx.textAlign = "left"
 
-        // Nội dung đáp án
+        // Nội dung đáp án (màu sắc ô thể hiện trạng thái chọn & đúng/sai)
         ctx.fillStyle = textColor
         ctx.font = "bold 20px 'Plus Jakarta Sans', sans-serif"
-        const optText = opt.text.length > 30 ? opt.text.substring(0, 28) + "..." : opt.text
+        const optText = opt.text.length > 38 ? opt.text.substring(0, 36) + "..." : opt.text
         ctx.fillText(optText, rect.x + 75, rect.y + rect.h / 2 + 7)
-
-        // Trạng thái Đúng / Sai
-        if (revealed) {
-          if (isCorrect) {
-            ctx.fillStyle = "#FFFFFF"
-            ctx.font = "bold 18px 'Space Grotesk', sans-serif"
-            ctx.fillText("✓ ĐÚNG", rect.x + rect.w - 90, rect.y + rect.h / 2 + 7)
-          } else if (isSelected && !isCorrect) {
-            ctx.fillStyle = "#FFFFFF"
-            ctx.font = "bold 18px 'Space Grotesk', sans-serif"
-            ctx.fillText("✗ SAI", rect.x + rect.w - 75, rect.y + rect.h / 2 + 7)
-          }
-        } else if (isSelected) {
-          ctx.fillStyle = "#00a76d"
-          ctx.font = "bold 16px 'Space Grotesk', sans-serif"
-          ctx.fillText("✓ ĐÃ CHỌN", rect.x + rect.w - 110, rect.y + rect.h / 2 + 7)
-        }
       })
 
       // -------------------------------------------------------------
@@ -460,6 +560,33 @@ export default function ThreeExamHall({
     return sprite
   }
 
+  const createDeskBillboard = (text: string, bgColor = "#00C2CB") => {
+    const canvas = document.createElement("canvas")
+    canvas.width = 384
+    canvas.height = 96
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return null
+
+    ctx.fillStyle = bgColor
+    ctx.beginPath()
+    ctx.roundRect(8, 8, 368, 80, 20)
+    ctx.fill()
+    ctx.strokeStyle = "#FFFFFF"
+    ctx.lineWidth = 4
+    ctx.stroke()
+
+    ctx.fillStyle = "#000000"
+    ctx.font = "bold 24px 'Space Grotesk', sans-serif"
+    ctx.textAlign = "center"
+    ctx.fillText(text, 192, 55)
+
+    const texture = new THREE.CanvasTexture(canvas)
+    const material = new THREE.SpriteMaterial({ map: texture, depthTest: false })
+    const sprite = new THREE.Sprite(material)
+    sprite.scale.set(2.4, 0.6, 1)
+    return sprite
+  }
+
   // -------------------------------------------------------------
   // 3. INITIALIZE THREE.JS 3D SCENE
   // -------------------------------------------------------------
@@ -473,9 +600,10 @@ export default function ThreeExamHall({
     scene.fog = new THREE.FogExp2("#162838", 0.016)
     sceneRef.current = scene
 
-    // Camera (Positioned to have the giant screen clearly visible directly ahead)
+    // Camera (Góc nhìn POV rộng rãi, có thể điều chỉnh qua cài đặt)
+    const initialFov = povSettingsRef.current.fov || 70
     const camera = new THREE.PerspectiveCamera(
-      46,
+      initialFov,
       container.clientWidth / container.clientHeight,
       0.1,
       100
@@ -640,22 +768,9 @@ export default function ThreeExamHall({
     // -------------------------------------------------------------
     // C. 10 EXAM DESKS
     // -------------------------------------------------------------
-    const deskRows = [
-      { x: -5, z: -2.2, num: 1 },
-      { x: -2.5, z: -2.2, num: 2 },
-      { x: 0, z: -2.2, num: 3 }, // Player desk
-      { x: 2.5, z: -2.2, num: 4 },
-      { x: 5, z: -2.2, num: 5 },
-      { x: -5, z: 1.2, num: 6 },
-      { x: -2.5, z: 1.2, num: 7 },
-      { x: 0, z: 1.2, num: 8 },
-      { x: 2.5, z: 1.2, num: 9 },
-      { x: 5, z: 1.2, num: 10 },
-    ]
-
     const deskGroup = new THREE.Group()
 
-    deskRows.forEach((d) => {
+    DESK_CONFIGS.forEach((d) => {
       const isMyDesk = d.num === 3
 
       const tableGeo = new THREE.BoxGeometry(1.6, 0.08, 0.9)
@@ -669,6 +784,42 @@ export default function ThreeExamHall({
       table.castShadow = true
       table.receiveShadow = true
       deskGroup.add(table)
+
+      if (isMyDesk) {
+        myDeskMeshRef.current = table
+        table.userData = { isMyDesk: true }
+        myDeskObjectsRef.current.push(table)
+
+        // Bảng tên bàn của bạn (ẩn đi khi ở xa, chỉ hiện khi lại gần)
+        const deskBadge = createDeskBillboard("★ BÀN CỦA BẠN (Click hoặc phím E để ngồi)", "#00C2CB")
+        if (deskBadge) {
+          deskBadge.position.set(d.x, 2.1, d.z)
+          deskBadge.visible = false
+          deskGroup.add(deskBadge)
+          myDeskObjectsRef.current.push(deskBadge)
+          myDeskBadgeRef.current = deskBadge
+        }
+      }
+
+      // Ghế thi đấu đặt phía sau bàn
+      const chairMat = new THREE.MeshStandardMaterial({
+        color: isMyDesk ? "#00C2CB" : "#243442",
+        metalness: 0.2,
+        roughness: 0.5,
+      })
+      const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.06, 0.5), chairMat)
+      chairSeat.position.set(d.x, 0.45, d.z + 0.6)
+      chairSeat.castShadow = true
+      deskGroup.add(chairSeat)
+
+      const chairBack = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.5, 0.06), chairMat)
+      chairBack.position.set(d.x, 0.7, d.z + 0.82)
+      chairBack.castShadow = true
+      deskGroup.add(chairBack)
+
+      if (isMyDesk) {
+        myDeskObjectsRef.current.push(chairSeat, chairBack)
+      }
 
       const legGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.8)
       const legMat = new THREE.MeshStandardMaterial({ color: "#94a3b8", metalness: 0.8 }) // Metallic silver
@@ -754,15 +905,13 @@ export default function ThreeExamHall({
         npcHead.position.y = 1.1
         npcGroup.add(npcHead)
 
-        const randomEmojis = ["🦁", "🐼", "🐨", "🐰", "🐯", "🐻", "🐶", "🐱"]
-        const npcSprite = createPlayerBillboard(
-          randomEmojis[d.num % randomEmojis.length],
-          `Thí Sinh #${d.num}`,
-          false
-        )
+        // Nhãn tên thí sinh khác (ẩn khi ở xa, chỉ hiện khi lại gần)
+        const npcSprite = createPlayerBillboard(d.emoji, d.name, false)
         if (npcSprite) {
           npcSprite.position.set(0, 1.6, 0)
+          npcSprite.visible = false
           npcGroup.add(npcSprite)
+          npcSpritesRef.current[d.num] = npcSprite
         }
 
         deskGroup.add(npcGroup)
@@ -836,74 +985,74 @@ export default function ThreeExamHall({
     const raycaster = new THREE.Raycaster()
     const mouse = new THREE.Vector2()
 
+    // 1. Pointer Down: Bắt đầu bấm chuột (ghi lại tọa độ để phân biệt Click và Giữ Chuột Xoay)
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as HTMLElement
-      if (target.closest("button") || target.closest("header")) return
+      if (target.closest("button") || target.closest("header") || target.closest("input")) return
 
-      const rect = renderer.domElement.getBoundingClientRect()
-      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+      isPointerDownRef.current = true
+      // Chuột phải (button === 2) kích hoạt xoay camera ngay lập tức
+      isDraggingCameraRef.current = event.button === 2
+      pointerDownPosRef.current = { x: event.clientX, y: event.clientY }
+      lastPointerPosRef.current = { x: event.clientX, y: event.clientY }
+    }
 
-      raycaster.setFromCamera(mouse, camera)
+    // 2. Pointer Move: Xoay camera 360 độ góc nhìn thứ 3
+    const handlePointerMove = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      const isOverUI =
+        target &&
+        (target.closest("button") ||
+          target.closest("header") ||
+          target.closest("input") ||
+          target.closest(".interactive-ui"))
 
-      // 1. KIỂM TRA CLICK VÀO MÀN HÌNH ĐEN (GIANT 3D SCREEN)
-      if (screenMeshRef.current) {
-        const screenHits = raycaster.intersectObject(screenMeshRef.current)
-        if (screenHits.length > 0 && screenHits[0].uv) {
-          const uv = screenHits[0].uv
-          const canvasX = uv.x * 1024
-          const canvasY = (1 - uv.y) * 512
+      // Tính khoảng cách di chuyển chuột (movementX/Y hoặc delta)
+      const dx =
+        typeof event.movementX === "number" && !isNaN(event.movementX) && Math.abs(event.movementX) < 180
+          ? event.movementX
+          : event.clientX - lastPointerPosRef.current.x
+      const dy =
+        typeof event.movementY === "number" && !isNaN(event.movementY) && Math.abs(event.movementY) < 180
+          ? event.movementY
+          : event.clientY - lastPointerPosRef.current.y
 
-          // Kiểm tra nếu bấm nút "CÂU TIẾP THEO" trên màn hình khi đã hết giờ
-          if (isRevealedRef.current) {
-            if (
-              canvasX >= NEXT_BTN_RECT.x &&
-              canvasX <= NEXT_BTN_RECT.x + NEXT_BTN_RECT.w &&
-              canvasY >= NEXT_BTN_RECT.y &&
-              canvasY <= NEXT_BTN_RECT.y + NEXT_BTN_RECT.h
-            ) {
-              if (onNextQuestionRef.current) {
-                onNextQuestionRef.current()
-                return
-              }
-            }
+      lastPointerPosRef.current = { x: event.clientX, y: event.clientY }
+
+      // QUAY CHUỘT XUNG QUANH PHÒNG THI KHI ĐANG ĐI DẠO
+      if (!isSeatedRef.current && !isOverUI) {
+        const settings = povSettingsRef.current
+        const sensitivity = settings.mouseSensitivity || 1.0
+
+        if (settings.mouseControl === "FREE_LOOK") {
+          // BẠN CHỈ CẦN QUAY CHUỘT THÔI, KHÔNG CẦN GIỮ CHUỘT!
+          cameraYawRef.current -= dx * 0.0035 * sensitivity
+          cameraPitchRef.current = Math.max(
+            0.02,
+            Math.min(1.2, cameraPitchRef.current + dy * 0.0025 * sensitivity)
+          )
+        } else if (isPointerDownRef.current) {
+          // Chế độ giữ chuột kéo
+          const dist = Math.hypot(
+            event.clientX - pointerDownPosRef.current.x,
+            event.clientY - pointerDownPosRef.current.y
+          )
+          if (dist > 4 || event.button === 2) {
+            isDraggingCameraRef.current = true
           }
-
-          // Kiểm tra nếu bấm 1 trong 4 đáp án (A, B, C, D) trên màn hình đen!
-          if (!isRevealedRef.current && currentQuestionRef.current) {
-            for (let i = 0; i < currentQuestionRef.current.options.length; i++) {
-              const optRect = OPTION_RECTS[i]
-              if (
-                optRect &&
-                canvasX >= optRect.x &&
-                canvasX <= optRect.x + optRect.w &&
-                canvasY >= optRect.y &&
-                canvasY <= optRect.y + optRect.h
-              ) {
-                const opt = currentQuestionRef.current.options[i]
-                if (opt && onSelectOptionRef.current) {
-                  onSelectOptionRef.current(opt.id)
-                  return
-                }
-              }
-            }
+          if (isDraggingCameraRef.current) {
+            cameraYawRef.current -= dx * 0.0055 * sensitivity
+            cameraPitchRef.current = Math.max(
+              0.02,
+              Math.min(1.2, cameraPitchRef.current + dy * 0.004 * sensitivity)
+            )
+            renderer.domElement.style.cursor = "grabbing"
+            return
           }
-          return
         }
       }
 
-      // 2. NẾU KHÔNG BẤM VÀO MÀN HÌNH -> CLICK VÀO SÀN ĐỂ DI CHUYỂN
-      const floorHits = raycaster.intersectObject(floor)
-      if (floorHits.length > 0) {
-        const pt = floorHits[0].point
-        const cx = Math.max(-8, Math.min(8, pt.x))
-        const cz = Math.max(-4.5, Math.min(6, pt.z))
-        playerTargetPosRef.current = { x: cx, z: cz }
-      }
-    }
-
-    // Hover effect: Con trỏ đổi thành bàn tay (pointer) khi rê chuột qua các nút trên màn hình đen
-    const handlePointerMove = (event: MouseEvent) => {
+      // Rê chuột bình thường: Đổi con trỏ thành bàn tay (pointer) khi qua các vật thể tương tác
       const rect = renderer.domElement.getBoundingClientRect()
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
@@ -912,7 +1061,14 @@ export default function ThreeExamHall({
 
       let isHoveringInteractive = false
 
-      if (screenMeshRef.current) {
+      if (!isSeatedRef.current && myDeskObjectsRef.current.length > 0) {
+        const deskHits = raycaster.intersectObjects(myDeskObjectsRef.current, true)
+        if (deskHits.length > 0) {
+          isHoveringInteractive = true
+        }
+      }
+
+      if (!isHoveringInteractive && screenMeshRef.current) {
         const screenHits = raycaster.intersectObject(screenMeshRef.current)
         if (screenHits.length > 0 && screenHits[0].uv) {
           const uv = screenHits[0].uv
@@ -946,21 +1102,158 @@ export default function ThreeExamHall({
         }
       }
 
-      renderer.domElement.style.cursor = isHoveringInteractive ? "pointer" : "default"
+      renderer.domElement.style.cursor = isHoveringInteractive
+        ? "pointer"
+        : !isSeatedRef.current
+        ? povSettingsRef.current.mouseControl === "FREE_LOOK"
+          ? "crosshair"
+          : "grab"
+        : "default"
+    }
+
+    // 3. Pointer Up: Nhả chuột (nếu không kéo xoay thì xử lý Click tương tác)
+    const handlePointerUp = (event: MouseEvent) => {
+      if (!isPointerDownRef.current) return
+      const wasDragging =
+        povSettingsRef.current.mouseControl === "DRAG_TO_LOOK" &&
+        (isDraggingCameraRef.current || event.button === 2)
+      isPointerDownRef.current = false
+      isDraggingCameraRef.current = false
+
+      if (wasDragging) {
+        renderer.domElement.style.cursor = !isSeatedRef.current ? "grab" : "default"
+        return // Không kích hoạt Click khi vừa xoay camera
+      }
+
+      const target = event.target as HTMLElement
+      if (target.closest("button") || target.closest("header") || target.closest("input")) return
+
+      const rect = renderer.domElement.getBoundingClientRect()
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+
+      raycaster.setFromCamera(mouse, camera)
+
+      // A. KIỂM TRA CLICK VÀO BÀN CỦA BẠN (KHI ĐANG ĐỨNG) ĐỂ NGỒI XUỐNG VÀ MỞ MÀN HÌNH LỚN
+      if (!isSeatedRef.current && myDeskObjectsRef.current.length > 0) {
+        const deskHits = raycaster.intersectObjects(myDeskObjectsRef.current, true)
+        if (deskHits.length > 0) {
+          setIsSeated(true)
+          return
+        }
+      }
+
+      // B. KIỂM TRA CLICK VÀO MÀN HÌNH ĐEN (GIANT 3D SCREEN)
+      if (screenMeshRef.current) {
+        const screenHits = raycaster.intersectObject(screenMeshRef.current)
+        if (screenHits.length > 0 && screenHits[0].uv) {
+          const uv = screenHits[0].uv
+          const canvasX = uv.x * 1024
+          const canvasY = (1 - uv.y) * 512
+
+          if (isRevealedRef.current) {
+            if (
+              canvasX >= NEXT_BTN_RECT.x &&
+              canvasX <= NEXT_BTN_RECT.x + NEXT_BTN_RECT.w &&
+              canvasY >= NEXT_BTN_RECT.y &&
+              canvasY <= NEXT_BTN_RECT.y + NEXT_BTN_RECT.h
+            ) {
+              if (onNextQuestionRef.current) {
+                onNextQuestionRef.current()
+                return
+              }
+            }
+          }
+
+          if (!isRevealedRef.current && currentQuestionRef.current) {
+            for (let i = 0; i < currentQuestionRef.current.options.length; i++) {
+              const optRect = OPTION_RECTS[i]
+              if (
+                optRect &&
+                canvasX >= optRect.x &&
+                canvasX <= optRect.x + optRect.w &&
+                canvasY >= optRect.y &&
+                canvasY <= optRect.y + optRect.h
+              ) {
+                const opt = currentQuestionRef.current.options[i]
+                if (opt && onSelectOptionRef.current) {
+                  onSelectOptionRef.current(opt.id)
+                  return
+                }
+              }
+            }
+          }
+          return
+        }
+      }
+
+      // C. CLICK VÀO SÀN ĐỂ DI CHUYỂN
+      const floorHits = raycaster.intersectObject(floor)
+      if (floorHits.length > 0) {
+        if (isSeatedRef.current) {
+          setIsSeated(false)
+        }
+        const pt = floorHits[0].point
+        const cx = Math.max(-8, Math.min(8, pt.x))
+        const cz = Math.max(-4.5, Math.min(6, pt.z))
+        playerTargetPosRef.current = { x: cx, z: cz }
+      }
+    }
+
+    // 4. Cuộn chuột để Zoom camera gần/xa
+    const handleWheel = (e: WheelEvent) => {
+      if (isSeatedRef.current) return
+      const current = povSettingsRef.current.cameraDist || 5.6
+      const next = Math.max(3.5, Math.min(9.0, current + e.deltaY * 0.005))
+      updatePovSetting("cameraDist", next)
+    }
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault() // Cho phép giữ chuột phải xoay góc nhìn mượt mà như game MMORPG/AAA
     }
 
     renderer.domElement.addEventListener("pointerdown", handlePointerDown)
-    renderer.domElement.addEventListener("pointermove", handlePointerMove)
+    window.addEventListener("pointermove", handlePointerMove)
+    window.addEventListener("pointerup", handlePointerUp)
+    renderer.domElement.addEventListener("wheel", handleWheel, { passive: true })
+    renderer.domElement.addEventListener("contextmenu", handleContextMenu)
 
     // -------------------------------------------------------------
     // F. KEYBOARD LISTENERS (WASD / MŨI TÊN & PHÍM TẮT 1-4, A-D)
     // -------------------------------------------------------------
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase()
+
+      // Phím ESC: Đóng modal POV hoặc chuyển đổi giữa Ngồi vào bàn thi / Đứng dậy đi dạo
+      if (key === "escape") {
+        if (showPovSettingsRef.current) {
+          setShowPovSettings(false)
+          return
+        }
+        if (document.pointerLockElement) {
+          document.exitPointerLock()
+        }
+        setIsSeated((prev) => !prev)
+        return
+      }
+
+      // Phím E: Nếu đang đứng, nhấn E để ngồi vào bàn thi
+      if (!isSeatedRef.current) {
+        if (key === "e") {
+          setIsSeated(true)
+          return
+        }
+      } else {
+        // Nếu đang ngồi mà bấm phím di chuyển WASD / Mũi tên -> Tự động đứng dậy
+        if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
+          setIsSeated(false)
+        }
+      }
+
       keysPressedRef.current[key] = true
       playerTargetPosRef.current = null
 
-      // Phím tắt chọn đáp án nhanh trên bàn phím
+      // Phím tắt chọn đáp án nhanh trên bàn phím (1-4 hoặc A-D)
       if (!isRevealedRef.current && currentQuestionRef.current) {
         const opts = currentQuestionRef.current.options
         if (key === "1" || key === "a") {
@@ -1007,87 +1300,218 @@ export default function ThreeExamHall({
     const animate = () => {
       animFrameIdRef.current = requestAnimationFrame(animate)
 
-      let moveX = 0
-      let moveZ = 0
-
-      // Keyboard
-      const keys = keysPressedRef.current
-      if (keys["w"] || keys["arrowup"]) moveZ -= 1
-      if (keys["s"] || keys["arrowdown"]) moveZ += 1
-      if (keys["a"] || keys["arrowleft"]) moveX -= 1
-      if (keys["d"] || keys["arrowright"]) moveX += 1
-
-      // Joystick
-      if (joystickVectorRef.current.x !== 0 || joystickVectorRef.current.y !== 0) {
-        moveX = joystickVectorRef.current.x
-        moveZ = -joystickVectorRef.current.y
-        playerTargetPosRef.current = null
+      // Cập nhật FOV của Camera trong thời gian thực khi người dùng chỉnh cài đặt POV
+      if (cameraRef.current && cameraRef.current.fov !== povSettingsRef.current.fov) {
+        cameraRef.current.fov = povSettingsRef.current.fov
+        cameraRef.current.updateProjectionMatrix()
       }
 
-      // Point-to-click
-      if (playerTargetPosRef.current) {
-        const dx = playerTargetPosRef.current.x - playerPosRef.current.x
-        const dz = playerTargetPosRef.current.z - playerPosRef.current.z
-        const dist = Math.sqrt(dx * dx + dz * dz)
+      if (isSeatedRef.current) {
+        // Thí sinh ngồi chuẩn tư thế tại Bàn thi số 03
+        playerPosRef.current.x += (0 - playerPosRef.current.x) * 0.12
+        playerPosRef.current.z += (-1.55 - playerPosRef.current.z) * 0.12
+        playerRotationRef.current = 0
 
-        if (dist > 0.15) {
-          moveX = dx / dist
-          moveZ = dz / dist
-        } else {
-          playerTargetPosRef.current = null
-        }
-      }
-
-      const isMoving = moveX !== 0 || moveZ !== 0
-
-      if (isMoving) {
-        const len = Math.sqrt(moveX * moveX + moveZ * moveZ)
-        const vx = (moveX / len) * moveSpeed
-        const vz = (moveZ / len) * moveSpeed
-
-        playerPosRef.current.x = Math.max(-8, Math.min(8, playerPosRef.current.x + vx))
-        playerPosRef.current.z = Math.max(-4.5, Math.min(6, playerPosRef.current.z + vz))
-
-        const targetRot = Math.atan2(vx, vz)
-        playerRotationRef.current = targetRot
-
-        walkCycle += 0.25
         if (playerMeshRef.current) {
-          playerMeshRef.current.position.y = Math.abs(Math.sin(walkCycle)) * 0.08
+          playerMeshRef.current.position.x = playerPosRef.current.x
+          playerMeshRef.current.position.y = -0.15
+          playerMeshRef.current.position.z = playerPosRef.current.z
+          playerMeshRef.current.rotation.y = 0
+        }
+
+        // Camera hướng thẳng tới màn hình lớn
+        if (cameraRef.current) {
+          const targetCamX = 0
+          const targetCamY = 3.6
+          const targetCamZ = 2.4
+
+          cameraRef.current.position.x += (targetCamX - cameraRef.current.position.x) * 0.08
+          cameraRef.current.position.y += (targetCamY - cameraRef.current.position.y) * 0.08
+          cameraRef.current.position.z += (targetCamZ - cameraRef.current.position.z) * 0.08
+          cameraRef.current.lookAt(0, 4.2, -4.95)
+        }
+
+        // Khi đang ngồi làm bài: Ẩn toàn bộ nhãn tương tác và thông báo tiệm cận
+        if (myDeskBadgeRef.current) myDeskBadgeRef.current.visible = false
+        Object.values(npcSpritesRef.current).forEach((sp) => {
+          if (sp) sp.visible = false
+        })
+        if (nearbyTargetRef.current) {
+          nearbyTargetRef.current = null
+          setNearbyTarget(null)
         }
       } else {
-        if (playerMeshRef.current) {
-          playerMeshRef.current.position.y = 0
+        // Khi đứng dậy đi dạo quanh trường thi 3D
+        let inputForward = 0
+        let inputRight = 0
+
+        // Keyboard WASD / Mũi tên
+        const keys = keysPressedRef.current
+        if (keys["w"] || keys["arrowup"]) inputForward += 1
+        if (keys["s"] || keys["arrowdown"]) inputForward -= 1
+        if (keys["d"] || keys["arrowright"]) inputRight += 1
+        if (keys["a"] || keys["arrowleft"]) inputRight -= 1
+
+        // Joystick trên mobile
+        if (joystickVectorRef.current.x !== 0 || joystickVectorRef.current.y !== 0) {
+          inputRight = joystickVectorRef.current.x
+          inputForward = joystickVectorRef.current.y
+          playerTargetPosRef.current = null
         }
-      }
 
-      // Update character 3D mesh
-      if (playerMeshRef.current) {
-        playerMeshRef.current.position.x = playerPosRef.current.x
-        playerMeshRef.current.position.z = playerPosRef.current.z
-        playerMeshRef.current.rotation.y = playerRotationRef.current
-      }
+        let moveX = 0
+        let moveZ = 0
 
-      // Camera Follow: Keep screen in upper view and character in lower view
-      if (cameraRef.current) {
-        if (cameraModeRef.current === "FOLLOW") {
-          const targetCamX = playerPosRef.current.x * 0.3
-          const targetCamZ = playerPosRef.current.z + 5.2
-          const targetCamY = 4.4
+        // Chuyển đổi hướng di chuyển tương đối theo góc quay camera góc nhìn thứ 3
+        const yaw = cameraYawRef.current
+        const sinYaw = Math.sin(yaw)
+        const cosYaw = Math.cos(yaw)
 
-          cameraRef.current.position.x += (targetCamX - cameraRef.current.position.x) * 0.06
-          cameraRef.current.position.y += (targetCamY - cameraRef.current.position.y) * 0.06
-          cameraRef.current.position.z += (targetCamZ - cameraRef.current.position.z) * 0.06
+        if (inputForward !== 0 || inputRight !== 0) {
+          moveX = inputRight * cosYaw - inputForward * sinYaw
+          moveZ = -inputRight * sinYaw - inputForward * cosYaw
+          playerTargetPosRef.current = null
+        }
 
-          cameraRef.current.lookAt(
-            playerPosRef.current.x * 0.15,
-            3.2,
-            -4.5
-          )
+        // Point-to-click di chuyển sàn
+        if (playerTargetPosRef.current) {
+          const dx = playerTargetPosRef.current.x - playerPosRef.current.x
+          const dz = playerTargetPosRef.current.z - playerPosRef.current.z
+          const dist = Math.sqrt(dx * dx + dz * dz)
+
+          if (dist > 0.15) {
+            moveX = dx / dist
+            moveZ = dz / dist
+          } else {
+            playerTargetPosRef.current = null
+          }
+        }
+
+        const isMoving = moveX !== 0 || moveZ !== 0
+
+        if (isMoving) {
+          const len = Math.sqrt(moveX * moveX + moveZ * moveZ)
+          const vx = (moveX / len) * moveSpeed
+          const vz = (moveZ / len) * moveSpeed
+
+          playerPosRef.current.x = Math.max(-8, Math.min(8, playerPosRef.current.x + vx))
+          playerPosRef.current.z = Math.max(-4.5, Math.min(6, playerPosRef.current.z + vz))
+
+          // Xoay hướng mặt nhân vật mượt mà theo đúng hướng di chuyển trong Three.js
+          const targetRot = Math.atan2(-vx, -vz)
+          if (playerMeshRef.current) {
+            let diff = targetRot - playerMeshRef.current.rotation.y
+            while (diff < -Math.PI) diff += Math.PI * 2
+            while (diff > Math.PI) diff -= Math.PI * 2
+            playerMeshRef.current.rotation.y += diff * 0.18
+            playerRotationRef.current = playerMeshRef.current.rotation.y
+          }
+
+          walkCycle += 0.25
+          if (playerMeshRef.current) {
+            playerMeshRef.current.position.y = Math.abs(Math.sin(walkCycle)) * 0.08
+          }
         } else {
-          // OVERVIEW: Broad arena view
-          cameraRef.current.position.set(0, 6.8, 6.8)
-          cameraRef.current.lookAt(0, 3.6, -4.5)
+          if (playerMeshRef.current) {
+            playerMeshRef.current.position.y = 0
+          }
+        }
+
+        // Cập nhật vị trí nhân vật 3D
+        if (playerMeshRef.current) {
+          playerMeshRef.current.position.x = playerPosRef.current.x
+          playerMeshRef.current.position.z = playerPosRef.current.z
+        }
+
+        // Camera Follow: Quay 360 độ góc nhìn thứ ba quanh nhân vật khi giữ chuột
+        if (cameraRef.current) {
+          if (cameraModeRef.current === "FOLLOW") {
+            const pitch = cameraPitchRef.current
+            const dist = povSettingsRef.current.cameraDist || 5.6
+
+            const targetCamX = playerPosRef.current.x + dist * Math.sin(yaw) * Math.cos(pitch)
+            const targetCamY = playerPosRef.current.y + 1.2 + dist * Math.sin(pitch)
+            const targetCamZ = playerPosRef.current.z + dist * Math.cos(yaw) * Math.cos(pitch)
+
+            cameraRef.current.position.x += (targetCamX - cameraRef.current.position.x) * 0.1
+            cameraRef.current.position.y += (targetCamY - cameraRef.current.position.y) * 0.1
+            cameraRef.current.position.z += (targetCamZ - cameraRef.current.position.z) * 0.1
+
+            cameraRef.current.lookAt(
+              playerPosRef.current.x,
+              playerPosRef.current.y + 1.2,
+              playerPosRef.current.z
+            )
+          } else {
+            // OVERVIEW: Góc nhìn bao quát toàn trường thi
+            cameraRef.current.position.set(0, 7.5, 7.5)
+            cameraRef.current.lookAt(0, 3.6, -4.5)
+          }
+        }
+
+        // -------------------------------------------------------------
+        // PROXIMITY DETECTION (CHỈ HIỆN KHI TIẾP CẬN GẦN BÀN HOẶC NGƯỜI)
+        // -------------------------------------------------------------
+        const px = playerPosRef.current.x
+        const pz = playerPosRef.current.z
+
+        // Khoảng cách tới Bàn thi số 03 (bàn của mình)
+        const distToMyDesk = Math.hypot(px - 0, pz - (-2.0))
+        const isNearMyDesk = distToMyDesk < 2.0
+
+        if (myDeskBadgeRef.current) {
+          myDeskBadgeRef.current.visible = isNearMyDesk
+        }
+
+        let closestTarget: NearbyTarget | null = null
+        let minDistance = 999
+
+        if (isNearMyDesk) {
+          closestTarget = {
+            type: "MY_DESK",
+            deskNum: 3,
+            name: "Bàn Thi #03 (Của Bạn)",
+            emoji: "🪑",
+            quote: "Bàn thi của bạn. Nhấn E hoặc bấm nút để ngồi thi.",
+          }
+          minDistance = distToMyDesk
+        }
+
+        // Khoảng cách tới các bàn NPC
+        DESK_CONFIGS.forEach((d) => {
+          if (d.num === 3) return
+          const sprite = npcSpritesRef.current[d.num]
+          const distToNpc = Math.hypot(px - d.x, pz - (d.z + 0.4))
+          const isNearNpc = distToNpc < 1.9
+
+          if (sprite) {
+            sprite.visible = isNearNpc
+          }
+
+          if (isNearNpc && distToNpc < minDistance) {
+            minDistance = distToNpc
+            closestTarget = {
+              type: "NPC",
+              deskNum: d.num,
+              name: d.name,
+              emoji: d.emoji,
+              quote: d.quote,
+            }
+          }
+        })
+
+        // Chỉ cập nhật state khi đối tượng tương tác thay đổi để tối ưu hiệu năng
+        const prevTarget = nearbyTargetRef.current
+        const isChanged =
+          (!prevTarget && closestTarget) ||
+          (prevTarget && !closestTarget) ||
+          (prevTarget &&
+            closestTarget &&
+            (prevTarget.deskNum !== closestTarget.deskNum || prevTarget.type !== closestTarget.type))
+
+        if (isChanged) {
+          nearbyTargetRef.current = closestTarget
+          setNearbyTarget(closestTarget)
         }
       }
 
@@ -1102,7 +1526,13 @@ export default function ThreeExamHall({
       window.removeEventListener("keyup", handleKeyUp)
       window.removeEventListener("resize", handleResize)
       renderer.domElement.removeEventListener("pointerdown", handlePointerDown)
-      renderer.domElement.removeEventListener("pointermove", handlePointerMove)
+      window.removeEventListener("pointermove", handlePointerMove)
+      window.removeEventListener("pointerup", handlePointerUp)
+      renderer.domElement.removeEventListener("wheel", handleWheel)
+      renderer.domElement.removeEventListener("contextmenu", handleContextMenu)
+      myDeskObjectsRef.current = []
+      myDeskBadgeRef.current = null
+      npcSpritesRef.current = {}
       if (renderer.domElement.parentNode) {
         renderer.domElement.parentNode.removeChild(renderer.domElement)
       }
@@ -1187,6 +1617,25 @@ export default function ThreeExamHall({
     }
   }, [player?.avatar, player?.nickname])
 
+  // Snap/reset player mesh when seating status toggles
+  useEffect(() => {
+    if (isSeated) {
+      playerPosRef.current = { x: 0, y: -0.15, z: -1.55 }
+      playerTargetPosRef.current = null
+      playerRotationRef.current = 0
+      cameraYawRef.current = 0
+      cameraPitchRef.current = 0.28
+      if (playerMeshRef.current) {
+        playerMeshRef.current.position.set(0, -0.15, -1.55)
+        playerMeshRef.current.rotation.y = 0
+      }
+    } else {
+      if (playerMeshRef.current) {
+        playerMeshRef.current.position.y = 0
+      }
+    }
+  }, [isSeated])
+
   const progressPercent = Math.round(((currentIdx + 1) / totalQuestions) * 100)
 
   return (
@@ -1218,7 +1667,7 @@ export default function ThreeExamHall({
           </div>
         </div>
 
-        {/* Right Stats & Camera Toggle */}
+        {/* Right Stats & Camera / Seated Toggle */}
         <div className="flex items-center gap-2">
           {myStreak > 1 && (
             <div className="px-2.5 py-1 rounded-xl bg-orange-500 border border-black text-white font-black text-xs flex items-center gap-1 shadow">
@@ -1242,6 +1691,26 @@ export default function ThreeExamHall({
             </button>
           )}
 
+          {isSeated ? (
+            <button
+              onClick={() => setIsSeated(false)}
+              className="pointer-events-auto btn-3d btn-3d-white px-2.5 py-1.5 rounded-xl text-slate-900 shadow-[2px_2px_0px_#000] text-xs font-black flex items-center gap-1.5 cursor-pointer"
+              title="Đứng dậy đi dạo quanh phòng thi (Phím ESC hoặc WASD)"
+            >
+              <Minimize2 className="w-4 h-4 text-slate-700" />
+              <span className="hidden md:inline">Đi Dạo 🚶</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setIsSeated(true)}
+              className="pointer-events-auto btn-3d btn-3d-cyan px-2.5 py-1.5 rounded-xl text-slate-900 shadow-[2px_2px_0px_#000] text-xs font-black flex items-center gap-1.5 cursor-pointer"
+              title="Ngồi vào bàn thi số 03 (Phím E)"
+            >
+              <Armchair className="w-4 h-4 text-slate-950" />
+              <span className="hidden md:inline">Ngồi Bàn 🪑</span>
+            </button>
+          )}
+
           <button
             onClick={() => setCameraMode((prev) => (prev === "FOLLOW" ? "OVERVIEW" : "FOLLOW"))}
             className="pointer-events-auto btn-3d btn-3d-white p-1.5 rounded-xl text-slate-900 shadow-[2px_2px_0px_#000]"
@@ -1249,39 +1718,407 @@ export default function ThreeExamHall({
           >
             {cameraMode === "FOLLOW" ? <Compass className="w-4 h-4 text-[#00C2CB]" /> : <Camera className="w-4 h-4 text-[#00a76d]" />}
           </button>
+
+          {/* Nút mở cài đặt góc nhìn POV & Điều khiển */}
+          <button
+            onClick={() => setShowPovSettings(true)}
+            className="pointer-events-auto btn-3d btn-3d-white px-2.5 py-1.5 rounded-xl text-slate-900 shadow-[2px_2px_0px_#000] text-xs font-black flex items-center gap-1.5 cursor-pointer"
+            title="Cài đặt góc nhìn POV & Điều khiển chuột"
+          >
+            <Sliders className="w-4 h-4 text-[#00a76d]" />
+            <span className="hidden lg:inline">POV ({povSettings.fov}°)</span>
+          </button>
         </div>
       </header>
 
-      {/* 3. Subtle Controls Hint At Bottom (Không còn bất kỳ thẻ trắng nào che khuất!) */}
-      <footer className="relative z-20 w-full px-4 pb-3 flex justify-between items-center pointer-events-none">
-        <div className="bg-black/75 backdrop-blur-md border border-white/20 text-white/90 px-3 py-1 rounded-2xl text-[11px] font-bold flex items-center gap-2 shadow">
-          <span className="w-2 h-2 rounded-full bg-[#00C2CB] animate-pulse" />
-          <span>🎮 Bấm trực tiếp lên màn hình đen để chọn đáp án • Di chuyển: <strong>WASD / Mũi tên / Click sàn</strong></span>
-        </div>
+      {/* 3. FULL-SCREEN FOCUS EXAM INTERFACE (KHI THÍ SINH NGỒI VÀO BÀN THI) */}
+      {isSeated && currentQuestion && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center p-3 sm:p-6 lg:p-8 bg-slate-950/65 backdrop-blur-md animate-in fade-in duration-200 pointer-events-auto">
+          <div className="w-full max-w-5xl xl:max-w-6xl bg-[#FFFDF4] border-3 border-black rounded-3xl p-6 sm:p-8 md:p-10 shadow-[12px_12px_0px_#000] flex flex-col justify-between max-h-[94vh] overflow-y-auto">
+            {/* Header: Topic, Desk Badge & Timer */}
+            <div className="flex items-center justify-between gap-3 border-b-2 border-black/10 pb-4 sm:pb-5">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-1.5 rounded-xl bg-slate-900 text-[#6FEEFF] text-xs sm:text-sm font-black uppercase tracking-wider border border-black shadow-[2px_2px_0px_#000]">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <span>{topic}</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-xl bg-[#00C2CB]/20 border-2 border-[#00C2CB] text-[#006e75] text-xs sm:text-sm font-black">
+                  <Armchair className="w-4 h-4" />
+                  <span>Bàn Thi #03 (Chính Thức)</span>
+                </div>
+              </div>
 
-        {selectedOptionId && !isRevealed && (
-          <div className="bg-[#00a76d] border-2 border-white text-white px-3.5 py-1 rounded-2xl text-xs font-black shadow-lg animate-bounce">
-            ✓ Đã Chốt Đáp Án Trên Màn Hình!
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-xl text-sm sm:text-base font-black border-2 border-black shadow-[2px_2px_0px_#000] ${
+                    timeRemaining <= 5
+                      ? "bg-rose-500 text-white animate-pulse"
+                      : "bg-amber-100 text-amber-950"
+                  }`}
+                >
+                  <Clock className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                  <span>{timeRemaining}s</span>
+                </div>
+
+                <button
+                  onClick={() => setIsSeated(false)}
+                  className="btn-3d btn-3d-white px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 shadow-[2px_2px_0px_#000] cursor-pointer hover:bg-slate-100 transition"
+                  title="Đứng dậy đi lại trong phòng thi 3D (Phím ESC hoặc WASD)"
+                >
+                  <Minimize2 className="w-4 h-4 text-slate-700" />
+                  <span className="hidden sm:inline">Đứng Dậy Đi Dạo 🚶</span>
+                  <span className="sm:hidden">Đi Dạo 🚶</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Question Heading */}
+            <div className="py-5 sm:py-7 md:py-8">
+              <span className="text-sm sm:text-base font-black text-[#00a76d] uppercase tracking-wider block mb-2">
+                Câu {currentIdx + 1} / {totalQuestions}
+              </span>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-950 leading-snug tracking-tight">
+                {currentQuestion.text}
+              </h2>
+            </div>
+
+            {/* Options 4 Big Responsive Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 md:gap-6 my-2 sm:my-4">
+              {currentQuestion.options.map((opt, i) => {
+                const theme = OPTION_THEMES[i] || { letter: String.fromCharCode(65 + i), color: "#00C2CB" }
+                const isSelected = selectedOptionId === opt.id
+                const isCorrect = opt.isCorrect
+
+                let cardStyle = "bg-white hover:bg-slate-50 border-3 border-black text-slate-900 shadow-[5px_5px_0px_#000] active:translate-y-1 active:shadow-[1px_1px_0px_#000]"
+
+                if (isRevealed) {
+                  if (isCorrect) {
+                    cardStyle = "bg-emerald-100 border-4 border-emerald-600 text-emerald-950 shadow-[5px_5px_0px_#059669]"
+                  } else if (isSelected) {
+                    cardStyle = "bg-rose-100 border-4 border-rose-600 text-rose-950 shadow-[5px_5px_0px_#e11d48]"
+                  } else {
+                    cardStyle = "bg-slate-100/60 border-2 border-slate-300 text-slate-400 opacity-40 shadow-none"
+                  }
+                } else if (isSelected) {
+                  cardStyle = "bg-emerald-50 border-4 border-[#00a76d] text-slate-950 shadow-[5px_5px_0px_#00a76d]"
+                }
+
+                return (
+                  <button
+                    key={opt.id}
+                    disabled={isRevealed}
+                    onClick={() => onSelectOption(opt.id)}
+                    className={`group text-left p-4 sm:p-5 md:p-6 rounded-2xl sm:rounded-3xl border-3 transition-all duration-150 flex items-center gap-4 sm:gap-5 cursor-pointer disabled:cursor-default ${cardStyle}`}
+                  >
+                    <div
+                      className="w-11 h-11 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-2xl border-2 sm:border-3 border-black flex items-center justify-center font-black text-white text-lg sm:text-xl md:text-2xl shrink-0 shadow-[2px_2px_0px_#000]"
+                      style={{ backgroundColor: theme.color }}
+                    >
+                      {theme.letter}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="text-base sm:text-lg md:text-xl font-bold leading-snug break-words">
+                        {opt.text}
+                      </div>
+                    </div>
+
+                    <span className="text-xs sm:text-sm font-mono font-bold text-slate-400 hidden sm:inline-block">
+                      [{i + 1}]
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Explanation & Next Question */}
+            {isRevealed && (
+              <div className="mt-6 pt-5 border-t-2 border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-200">
+                <div className="flex-1 text-left w-full sm:w-auto">
+                  <div className="flex items-center gap-2 text-xs sm:text-sm font-black text-[#00a76d]">
+                    <Sparkles className="w-4 h-4" />
+                    <span>GIẢI THÍCH CHI TIẾT:</span>
+                  </div>
+                  <p className="text-sm sm:text-base text-slate-700 font-semibold mt-1 leading-relaxed">
+                    {currentQuestion.explanation || "Đây là đáp án chính xác theo kiến thức chuyên sâu."}
+                  </p>
+                </div>
+
+                {onNextQuestion && (
+                  <button
+                    onClick={onNextQuestion}
+                    className="w-full sm:w-auto btn-3d btn-3d-green px-7 sm:px-8 py-3.5 sm:py-4 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center gap-2.5 shadow-[5px_5px_0px_#000] cursor-pointer shrink-0 animate-bounce"
+                  >
+                    <span>{currentIdx + 1 < totalQuestions ? "Câu Tiếp Theo" : "Xem Kết Quả"}</span>
+                    <ArrowRight className="w-5 h-5 stroke-[3]" />
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-        )}
-      </footer>
+        </div>
+      )}
 
-      {/* 4. Virtual Joystick for Mobile (Bottom Left) */}
-      <div
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        className="sm:hidden absolute bottom-16 left-4 w-20 h-20 rounded-full bg-black/60 border-2 border-white/40 flex items-center justify-center pointer-events-auto z-30 touch-none shadow-xl"
-      >
+      {/* 4. VIRTUAL JOYSTICK CHO MOBILE (KHI ĐANG ĐỨNG DẬY ĐI DẠO) */}
+      {!isSeated && (
         <div
-          style={{
-            transform: `translate(${joystickThumbPos.x}px, ${joystickThumbPos.y}px)`,
-          }}
-          className={`w-9 h-9 rounded-full ${
-            virtualJoystickActive ? "bg-[#00C2CB] scale-110" : "bg-white/80"
-          } shadow-md transition-transform duration-75`}
-        />
-      </div>
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="sm:hidden absolute bottom-12 left-4 w-20 h-20 rounded-full bg-black/60 border-2 border-white/40 flex items-center justify-center pointer-events-auto z-30 touch-none shadow-xl"
+        >
+          <div
+            style={{
+              transform: `translate(${joystickThumbPos.x}px, ${joystickThumbPos.y}px)`,
+            }}
+            className={`w-9 h-9 rounded-full ${
+              virtualJoystickActive ? "bg-[#00C2CB] scale-110" : "bg-white/80"
+            } shadow-md transition-transform duration-75`}
+          />
+        </div>
+      )}
+
+      {/* 5. THÔNG BÁO TƯƠNG TÁC TIỆM CẬN (CHỈ HIỆN KHI TIẾP CẬN GẦN BÀN HOẶC NGƯỜI) */}
+      {!isSeated && nearbyTarget && (
+        <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-30 pointer-events-auto animate-in slide-in-from-bottom-4 fade-in duration-200">
+          {nearbyTarget.type === "MY_DESK" ? (
+            <button
+              onClick={() => setIsSeated(true)}
+              className="btn-3d btn-3d-cyan px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl border-3 border-black text-slate-950 font-black text-sm sm:text-base flex items-center gap-3 shadow-[6px_6px_0px_#000] cursor-pointer hover:scale-105 active:scale-95 transition"
+            >
+              <Armchair className="w-5 h-5 sm:w-6 sm:h-6 text-slate-950" />
+              <span>[Phím E] Ngồi Vào Bàn Thi #03 (Mở Đề Thi)</span>
+            </button>
+          ) : (
+            <div className="bg-[#FFFDF4] border-3 border-black px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl shadow-[6px_6px_0px_#000] flex items-center gap-3.5 max-w-sm sm:max-w-md">
+              <span className="text-3xl sm:text-4xl shrink-0 select-none">{nearbyTarget.emoji}</span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-black text-slate-900 text-sm sm:text-base">{nearbyTarget.name}</span>
+                  <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-[#00C2CB]/20 text-[#006e75] border border-[#00C2CB]/40">
+                    Bàn {nearbyTarget.deskNum < 10 ? `0${nearbyTarget.deskNum}` : nearbyTarget.deskNum}
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-600 font-bold mt-0.5 truncate">
+                  &ldquo;{nearbyTarget.quote}&rdquo;
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 6. MODAL CÀI ĐẶT GÓC NHÌN POV & ĐIỀU KHIỂN CHUỘT */}
+      {showPovSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-150 pointer-events-auto">
+          <div className="w-full max-w-lg bg-[#FFFDF4] border-3 border-black rounded-3xl p-5 sm:p-7 shadow-[10px_10px_0px_#000] flex flex-col gap-4 sm:gap-5 max-h-[92vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b-2 border-black/10 pb-3 sm:pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-[#00C2CB] border-2 border-black flex items-center justify-center text-slate-950 shadow-[2px_2px_0px_#000]">
+                  <Eye className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-950">Cài Đặt Góc Nhìn POV</h3>
+                  <p className="text-xs text-slate-600 font-bold">Tùy chỉnh góc nhìn rộng và chế độ quay chuột</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPovSettings(false)}
+                className="btn-3d btn-3d-white p-2 rounded-xl text-slate-700 shadow-[2px_2px_0px_#000] cursor-pointer"
+                title="Đóng (ESC)"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* 1. Góc nhìn FOV (Field of view) */}
+            <div className="bg-white border-2 border-black rounded-2xl p-3.5 sm:p-4 shadow-[3px_3px_0px_#000] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs sm:text-sm font-black text-slate-900">
+                  Góc Nhìn FOV (Độ Rộng Trường Nhìn)
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs sm:text-sm font-black text-[#008f5d] px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-300">
+                    {povSettings.fov}°
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    {povSettings.fov < 60 ? "Hẹp" : povSettings.fov <= 75 ? "Rộng (Khuyến nghị)" : "Siêu Rộng"}
+                  </span>
+                </div>
+              </div>
+
+              <input
+                type="range"
+                min={50}
+                max={95}
+                step={1}
+                value={povSettings.fov}
+                onChange={(e) => updatePovSetting("fov", Number(e.target.value))}
+                className="w-full accent-[#00a76d] cursor-pointer h-2 bg-slate-200 rounded-lg"
+              />
+
+              {/* Preset buttons */}
+              <div className="flex items-center gap-2 pt-0.5">
+                {[
+                  { label: "55° Hẹp", val: 55 },
+                  { label: "70° Rộng (Chuẩn)", val: 70 },
+                  { label: "85° Siêu Rộng", val: 85 },
+                ].map((item) => (
+                  <button
+                    key={item.val}
+                    type="button"
+                    onClick={() => updatePovSetting("fov", item.val)}
+                    className={`flex-1 text-[11px] sm:text-xs font-black py-1.5 px-2 rounded-xl border-2 border-black transition cursor-pointer ${
+                      povSettings.fov === item.val
+                        ? "bg-[#00C2CB] text-slate-950 shadow-[2px_2px_0px_#000]"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. Chế độ điều khiển quay chuột */}
+            <div className="bg-white border-2 border-black rounded-2xl p-3.5 sm:p-4 shadow-[3px_3px_0px_#000] space-y-2.5">
+              <label className="text-xs sm:text-sm font-black text-slate-900 block">
+                Chế Độ Quay Chuột (Camera Look)
+              </label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => updatePovSetting("mouseControl", "FREE_LOOK")}
+                  className={`text-left p-3 rounded-xl border-2 border-black transition cursor-pointer ${
+                    povSettings.mouseControl === "FREE_LOOK"
+                      ? "bg-emerald-50 border-emerald-600 shadow-[3px_3px_0px_#059669]"
+                      : "bg-slate-50 hover:bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-black text-slate-950 text-xs sm:text-sm">
+                    {povSettings.mouseControl === "FREE_LOOK" && <Check className="w-4 h-4 text-emerald-600" />}
+                    <span>Tự Do Quay Chuột</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 font-bold mt-1 leading-snug">
+                    Chỉ cần di chuột là xoay góc nhìn, không cần giữ phím hay chuột.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => updatePovSetting("mouseControl", "DRAG_TO_LOOK")}
+                  className={`text-left p-3 rounded-xl border-2 border-black transition cursor-pointer ${
+                    povSettings.mouseControl === "DRAG_TO_LOOK"
+                      ? "bg-emerald-50 border-emerald-600 shadow-[3px_3px_0px_#059669]"
+                      : "bg-slate-50 hover:bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-black text-slate-950 text-xs sm:text-sm">
+                    {povSettings.mouseControl === "DRAG_TO_LOOK" && <Check className="w-4 h-4 text-emerald-600" />}
+                    <span>Giữ Chuột Để Quay</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 font-bold mt-1 leading-snug">
+                    Nhấp giữ chuột trái/phải và kéo để xoay góc nhìn.
+                  </p>
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Độ nhạy quay chuột */}
+            <div className="bg-white border-2 border-black rounded-2xl p-3.5 sm:p-4 shadow-[3px_3px_0px_#000] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs sm:text-sm font-black text-slate-900">
+                  Độ Nhạy Chuột (Sensitivity)
+                </label>
+                <span className="font-mono text-xs sm:text-sm font-black text-slate-800 px-2.5 py-0.5 rounded-lg bg-slate-100 border border-slate-300">
+                  {povSettings.mouseSensitivity.toFixed(1)}x
+                </span>
+              </div>
+
+              <input
+                type="range"
+                min={0.5}
+                max={2.5}
+                step={0.1}
+                value={povSettings.mouseSensitivity}
+                onChange={(e) => updatePovSetting("mouseSensitivity", Number(e.target.value))}
+                className="w-full accent-[#00a76d] cursor-pointer h-2 bg-slate-200 rounded-lg"
+              />
+            </div>
+
+            {/* 4. Khoảng cách camera */}
+            <div className="bg-white border-2 border-black rounded-2xl p-3.5 sm:p-4 shadow-[3px_3px_0px_#000] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs sm:text-sm font-black text-slate-900">
+                  Khoảng Cách Camera
+                </label>
+                <span className="font-mono text-xs sm:text-sm font-black text-slate-800 px-2.5 py-0.5 rounded-lg bg-slate-100 border border-slate-300">
+                  {povSettings.cameraDist.toFixed(1)}m
+                </span>
+              </div>
+
+              <input
+                type="range"
+                min={3.5}
+                max={9.0}
+                step={0.2}
+                value={povSettings.cameraDist}
+                onChange={(e) => {
+                  const val = Number(e.target.value)
+                  updatePovSetting("cameraDist", val)
+                }}
+                className="w-full accent-[#00a76d] cursor-pointer h-2 bg-slate-200 rounded-lg"
+              />
+
+              <div className="flex items-center gap-2 pt-0.5">
+                {[
+                  { label: "Gần (4.2m)", val: 4.2 },
+                  { label: "Vừa (5.6m)", val: 5.6 },
+                  { label: "Xa (7.5m)", val: 7.5 },
+                ].map((item) => (
+                  <button
+                    key={item.val}
+                    type="button"
+                    onClick={() => {
+                      updatePovSetting("cameraDist", item.val)
+                    }}
+                    className={`flex-1 text-[11px] sm:text-xs font-black py-1.5 px-2 rounded-xl border-2 border-black transition cursor-pointer ${
+                      Math.abs(povSettings.cameraDist - item.val) < 0.2
+                        ? "bg-[#00C2CB] text-slate-950 shadow-[2px_2px_0px_#000]"
+                        : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between gap-3 pt-2 border-t-2 border-black/10">
+              <button
+                type="button"
+                onClick={resetPovSettings}
+                className="btn-3d btn-3d-white px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-[2px_2px_0px_#000] cursor-pointer hover:bg-slate-100 transition"
+              >
+                <RotateCcw className="w-4 h-4 text-slate-600" />
+                <span>Mặc Định</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowPovSettings(false)}
+                className="btn-3d btn-3d-green px-6 py-2.5 rounded-xl text-xs sm:text-sm font-black flex items-center gap-2 shadow-[3px_3px_0px_#000] cursor-pointer"
+              >
+                <Check className="w-4 h-4 stroke-[3]" />
+                <span>Hoàn Tất & Lưu</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

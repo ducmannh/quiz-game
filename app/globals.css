@@ -165,3 +165,14 @@
   border-color: #000000;
   box-shadow: 0 4px 0 #000000;
 }
+
+/* Hide Next.js Dev Indicator Logo in bottom corner */
+nextjs-portal,
+[data-nextjs-dev-indicator],
+[data-nextjs-toast-wrapper],
+#__next-build-watcher {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

@@ -132,17 +132,28 @@
   - [x] 4 Ô đáp án A - B - C - D hiển thị trực tiếp trên bề mặt màn hình đen với 4 gam màu Quiz.com rực rỡ, đổi trạng thái viền và chữ khi người chơi chọn.
   - [x] **Tương tác bấm chuột trực tiếp trên màn hình 3D**: Sử dụng **Three.js Raycaster UV coordinates** để tính toán chính xác vị trí click vào các ô đáp án và nút "CÂU TIẾP THEO" trên bề mặt màn hình đen; con trỏ chuột tự động đổi thành hình bàn tay (`pointer`) khi rê qua các nút trên màn hình.
   - [x] Lời giải thích chi tiết và nút chuyển câu hỏi được vẽ trực tiếp trên màn hình đen khi kết thúc thời gian câu hỏi.
-- [x] **Hàng Bàn Thi 3D (Exam Desks & Podiums)**:
+- [x] **Hàng Bàn Thi 3D & Ghế Thi Đấu (Exam Desks & Chairs)**:
   - [x] 10 Bàn thi đấu thiết kế 3D hiện đại xếp theo hàng (bàn gỗ, chân kim loại, màn hình buzzer, biển số bàn và đèn tín hiệu chuyển màu theo trạng thái làm bài: Xanh khi đúng, Đỏ khi sai, Vàng khi đang chốt).
-  - [x] Bàn của người chơi hiện tại (Bàn #03) được làm nổi bật với đèn neon xanh rực rỡ.
+  - [x] Ghế thi đấu đặt phía sau mỗi bàn thi với điểm ngồi chính xác.
+  - [x] Bàn của người chơi hiện tại (Bàn #03) được làm nổi bật với đèn neon xanh rực rỡ và bảng hiệu 3D `★ BÀN CỦA BẠN (Click để ngồi)`.
   - [x] Các bàn còn lại có các thí sinh 3D khác (NPC / người cùng phòng) với bảng tên linh vật floating.
+- [x] **Chế Độ Ngồi Vào Bàn Thi Mở Màn Hình Lớn (Desk Seating & Full-Screen Focus Exam Mode)**:
+  - [x] **Tự động ngồi vào bàn thi khi vào phòng (`isSeated = true`)**: Nhân vật 3D ngồi đúng tư thế tại ghế Bàn #03, camera tự động lướt mượt mà về góc nhìn cận cảnh hướng thẳng sân khấu.
+  - [x] **Giao diện bài thi Full Màn Hình Siêu Rõ Nét**: Hiển thị bảng câu hỏi to bản phong cách Quiz.com Neo-Brutalist trên nền kính mờ (`backdrop-blur`), phông chữ lớn `text-2xl` - `text-3xl` dễ đọc, 4 nút đáp án A/B/C/D to lớn, xúc giác, dễ dàng bấm chọn bằng chuột/ngón tay.
+  - [x] **Chuyển đổi linh hoạt giữa Ngồi thi và Đứng dậy đi dạo**:
+    - Khi đang ngồi: Bấm nút **"Đứng Dậy Đi Dạo 🚶"** hoặc phím **ESC** hoặc phím **WASD / Mũi tên** để đứng dậy đi lại tự do trong trường thi 3D.
+    - Khi đang đứng: Click trực tiếp vào Bàn thi #03 trong không gian 3D, hoặc bấm phím **E**, hoặc bấm nút nổi **"🪑 Ngồi Vào Bàn (Mở Màn Hình Lớn) ↗"** ở góc phải màn hình để ngồi xuống và phóng to màn hình câu hỏi.
 - [x] **Mô Hình Người Di Chuyển 3D (Interactive 3D Player Character)**:
   - [x] Nhân vật 3D phong cách hoạt hình với bóng đổ, thân nón, đầu tròn và bảng tên Billboard 3D hiển thị Avatar Emoji + Nickname của người chơi.
   - [x] Cơ chế di chuyển linh hoạt theo 3 cách:
     - **Bàn phím PC:** Phím **W-A-S-D** hoặc các phím **Mũi tên** để đi lại mượt mà với góc xoay tự nhiên và hoạt ảnh nhún chân (bobbing).
     - **Chuột / Pointer:** Click vào bất kỳ vị trí nào trên sàn để nhân vật tự động bước tới điểm đó.
     - **Thiết bị cảm ứng / Mobile:** Cần điều khiển ảo **Virtual Joystick** ở góc trái màn hình để di chuyển nhân vật dễ dàng bằng ngón tay.
-  - [x] Chế độ xem Camera kép: Chế độ theo sát người chơi (Third-person follow) và Chế độ toàn cảnh trường thi (Overview bird's-eye view).
+  - [x] Chế độ xem Camera kép & Hệ thống xoay góc nhìn 360 độ (3rd-Person Orbit Camera):
+    - **Giữ chuột và kéo để xoay tự do 360 độ**: Cho phép người chơi ngắm toàn cảnh trường thi, các thí sinh khác, bục sân khấu và trần đèn studio từ mọi góc độ như trong các game góc nhìn thứ ba AAA.
+    - **Di chuyển theo hướng camera**: Nhân vật tự động bước theo hướng góc nhìn camera khi bấm W/A/S/D.
+    - **Cuộn chuột (Mouse Wheel)**: Tự do phóng to / thu nhỏ (zoom in/out) khoảng cách camera quanh nhân vật.
+    - Đã dọn dẹp các thanh gợi ý ở đáy màn hình và ẩn hoàn toàn logo Next.js dev indicator cho tầm nhìn thông thoáng tối đa.
 
 ---
 
